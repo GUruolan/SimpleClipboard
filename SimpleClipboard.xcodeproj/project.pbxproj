@@ -29,9 +29,25 @@
 		55AC9E862EE2ACBF006B74A6 /* SimpleClipboardUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SimpleClipboardUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+		55AC9E9C2EE2ACFF006B74A6 /* Exceptions for "SimpleClipboard" folder in "Copy Bundle Resources" phase from "SimpleClipboard" target */ = {
+			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
+			buildPhase = 55AC9E692EE2ACBE006B74A6 /* Resources */;
+			membershipExceptions = (
+				AppDelegate.swift,
+				ClipboardManager.swift,
+				ContentView.swift,
+				SimpleClipboardApp.swift,
+			);
+		};
+/* End PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		55AC9E6D2EE2ACBE006B74A6 /* SimpleClipboard */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				55AC9E9C2EE2ACFF006B74A6 /* Exceptions for "SimpleClipboard" folder in "Copy Bundle Resources" phase from "SimpleClipboard" target */,
+			);
 			path = SimpleClipboard;
 			sourceTree = "<group>";
 		};
