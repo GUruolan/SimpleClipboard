@@ -33,11 +33,14 @@ class ClipboardManager: ObservableObject {
         
         // 目前只处理文本类型
         if let newString = pasteboard.string(forType: .string) {
-            // 避免重复保存刚刚复制的内容
-            if !history.contains(newString) {
+            // 去除前后空格
+            let trimmedString = newString.trimmingCharacters(in: .whitespacesAndNewlines)
+            
+            // 避免保存空字符串或重复内容
+            if !trimmedString.isEmpty && !history.contains(trimmedString) {
                 DispatchQueue.main.async {
                     // 将新内容插入到数组最前面
-                    self.history.insert(newString, at: 0)
+                    self.history.insert(trimmedString, at: 0)
                     // 限制只保存最近20条
                     if self.history.count > maxHistoryCount {
                         self.history.removeLast()
