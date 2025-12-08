@@ -17,8 +17,8 @@ struct ContentView: View {
             // 样式调整 1: 头部使用更简洁的颜色和内边距
             Text("Clipboard History")
                 // 【样式调整：字体加粗】
-                .font(.system(.headline, design: .monospaced).bold())
-                .foregroundColor(.secondary)
+                .font(.system(.headline ).bold())
+                .foregroundColor(.black)
                 .padding(.horizontal)
                 .padding(.vertical, 8)
                 .frame(maxWidth: .infinity, alignment: .leading)

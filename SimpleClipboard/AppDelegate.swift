@@ -1,44 +1,57 @@
-// AppDelegate.swift
 import Cocoa
 import SwiftUI
 import AppKit
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     
-    // 【注意】使用 NSEvent.addGlobalMonitorForEvents 只能在应用获得辅助功能权限后才能真正全局生效。
-    // 否则，它只在当前应用是活跃状态时生效。
+    // 【重要提醒】使用 NSEvent.addGlobalMonitorForEvents 需要在系统设置的“辅助功能”中授予应用权限，才能在应用不活跃时全局生效。
+    
+    // 存储 MenuBarExtra 窗口的引用或状态 (如果需要，但通常 SwiftUI 会管理)
     
     func applicationDidFinishLaunching(_ notification: Notification) {
         
-        // 注册全局快捷键 (例如：Command + Shift + C)
-        NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { event in
+        // 注册全局快捷键 (Control + Shift + 空格)
+        // 必须在应用启动后注册
+        NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
             
-            // 检查快捷键：Command + Shift + 空格
-            let commandKey = event.modifierFlags.contains(.control)
-            let shiftKey = event.modifierFlags.contains(.shift)
-            let cKey = event.keyCode == 49
+            // --- 检查快捷键：Control + Shift + 空格 ---
             
-            if commandKey && shiftKey && cKey {
+            // 检查 Control 键
+            let hasControl = event.modifierFlags.contains(.control)
+            // 检查 Shift 键
+            let hasShift = event.modifierFlags.contains(.shift)
+            // 检查空格键 (KeyCode 49)
+            let isSpaceKey = event.keyCode == 49
+            
+            // 确保没有其他修饰键被按下 (可选，但推荐确保组合键的准确性)
+            let isOnlyControlShift = event.modifierFlags.intersection([.control, .shift, .capsLock, .option, .command]).contains(.control) &&
+                                     event.modifierFlags.intersection([.control, .shift, .capsLock, .option, .command]).contains(.shift) &&
+                                     !event.modifierFlags.contains(.option) &&
+                                     !event.modifierFlags.contains(.command)
+
+            // 精确匹配 Control + Shift + 空格
+            if isSpaceKey && hasControl && hasShift {
                 // 切换 MenuBarExtra 窗口的显示状态
-                self.toggleMenuBarExtra()
+                self?.toggleMenuBarExtra()
             }
         }
     }
     
     func toggleMenuBarExtra() {
-        // 切换窗口状态的逻辑比较复杂，在 SwiftUI MenuBarExtra 中，
-        // 我们没有直接的 API 可以“打开/关闭”窗口。
+        // 由于 SwiftUI 的 MenuBarExtra 没有直接的 close() 或 show() API，
+        // 这里的逻辑是通过激活/去激活应用来间接控制窗口状态。
         
-        // 最佳实践是：如果没有窗口打开，就激活 App，让 MenuBarExtra 默认显示。
         if !NSApp.isActive {
-            // 激活应用。由于这是菜单栏 App，激活后它会显示其 MenuBarExtra 窗口。
+            // 如果应用不活跃，激活它。对于 MenuBarExtra 应用，这通常会显示其窗口。
             NSApp.activate(ignoringOtherApps: true)
         } else {
             // 如果应用已活跃，且当前有 Key Window（即历史记录窗口），则关闭它。
+            // 关闭窗口后，应用会变为不活跃状态。
             if let window = NSApp.keyWindow {
                 window.close()
+                NSApp.deactivate() // 确保应用去活跃，以便下一次激活时窗口能重新弹出
             } else {
-                // 如果应用活跃但窗口已关闭（通常不会发生），再次尝试激活（触发窗口显示）
+                // 如果应用活跃但窗口已关闭，再次尝试激活（触发窗口显示）
                 NSApp.activate(ignoringOtherApps: true)
             }
         }

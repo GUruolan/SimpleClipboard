@@ -39,7 +39,7 @@ class ClipboardManager: ObservableObject {
                     // 将新内容插入到数组最前面
                     self.history.insert(newString, at: 0)
                     // 限制只保存最近20条
-                    if self.history.count > maxL {
+                    if self.history.count > maxHistoryCount {
                         self.history.removeLast()
                     }
                 }
