@@ -17,7 +17,7 @@ struct ContentView: View {
             // 样式调整 1: 头部使用更简洁的颜色和内边距
             Text("Clipboard History")
                 // 【样式调整：字体加粗】
-                .font(.system(.headline ).bold())
+                .font(.system(.title2 ).bold())
                 .foregroundColor(.black)
                 .padding(.horizontal)
                 .padding(.vertical, 8)
@@ -89,8 +89,8 @@ struct ContentView: View {
                 return .handled
             }
         }
-        .frame(width: 320, height: 450)
-        .background(Color.white.opacity(0.80))
+        .frame(width: 450, height: 300)
+        .background(Color.white)
     }
     
     // 私有方法：选中并复制项目
@@ -123,7 +123,7 @@ struct HistoryRow: View {
         HStack {
             // 文本内容
             Text(text)
-                .font(.subheadline).bold()
+                .font(.system(size: 14))
                 .foregroundColor(.primary)
                 .lineLimit(1)
                 .truncationMode(.tail)
@@ -145,7 +145,13 @@ struct HistoryRow: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 2)
         // 【样式修改】如果被选中（键盘）或鼠标悬停，使用蓝色背景
-        .background(isSelected || isHovering ? Color.blue.opacity(0.1) : Color.clear)
+        .background(isSelected || isHovering ? Color.blue.opacity(0.2) : Color.clear).cornerRadius(8)
+        .overlay(
+            isSelected ? AnyView(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.blue.opacity(0.8), lineWidth: 2)
+                ) : AnyView(EmptyView())
+            )
         .contentShape(Rectangle()) // 使整个 HStack 区域可点击/悬停
         .onHover { hovering in
             isHovering = hovering

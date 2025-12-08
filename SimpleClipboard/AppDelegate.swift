@@ -10,7 +10,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     func applicationDidFinishLaunching(_ notification: Notification) {
         
-        // 注册全局快捷键 (Control + Shift + 空格)
+        // 注册全局快捷键 (Control + Shift + K)
         // 必须在应用启动后注册
         NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
             
@@ -22,12 +22,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let hasShift = event.modifierFlags.contains(.shift)
             // 检查空格键 (KeyCode 49)
             let isSpaceKey = event.keyCode == 49
-            
-            // 确保没有其他修饰键被按下 (可选，但推荐确保组合键的准确性)
-            let isOnlyControlShift = event.modifierFlags.intersection([.control, .shift, .capsLock, .option, .command]).contains(.control) &&
-                                     event.modifierFlags.intersection([.control, .shift, .capsLock, .option, .command]).contains(.shift) &&
-                                     !event.modifierFlags.contains(.option) &&
-                                     !event.modifierFlags.contains(.command)
 
             // 精确匹配 Control + Shift + 空格
             if isSpaceKey && hasControl && hasShift {
