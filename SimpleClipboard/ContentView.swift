@@ -4,39 +4,72 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var clipboardManager: ClipboardManager
-    
+
     // 追踪当前选中项的索引
     @State private var selectedIndex: Int = 0
-    
+
     // 用于接收键盘焦点的 State
     @FocusState private var isListFocused: Bool
+
+    // 搜索关键词
+    @State private var searchText: String = ""
+
+    // 过滤后的历史记录
+    var filteredHistory: [String] {
+        if searchText.isEmpty {
+            return clipboardManager.history
+        } else {
+            return clipboardManager.history.filter { $0.localizedCaseInsensitiveContains(searchText) }
+        }
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             
             // 样式调整 1: 头部使用更简洁的颜色和内边距
-            Text("Clipboard History")
-                // 【样式调整：字体加粗】
-                .font(.system(.title2 ).bold())
-                .foregroundColor(.black)
-                .padding(.horizontal)
-                .padding(.vertical, 8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.white.opacity(0.8)) // 更淡的背景
-            
+            VStack(spacing: 8) {
+                HStack {
+                    Text("Clipboard History")
+                        // 【样式调整：字体加粗】
+                        .font(.system(.title2 ).bold())
+                        .foregroundColor(.black)
+
+                    Spacer()
+
+                    // 清空历史按钮
+                    Button {
+                        clipboardManager.clearHistory()
+                        selectedIndex = 0
+                    } label: {
+                        Image(systemName: "trash")
+                            .foregroundColor(.red)
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Clear all history")
+                }
+
+                // 搜索框
+                TextField("Search...", text: $searchText)
+                    .textFieldStyle(.roundedBorder)
+                    .padding(.horizontal, 4)
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+            .background(Color.white.opacity(0.8)) // 更淡的背景
+
             Divider()
             
             List {
-                ForEach(clipboardManager.history.indices, id: \.self) { index in
+                ForEach(filteredHistory.indices, id: \.self) { index in
                     HistoryRow(
                         manager: clipboardManager,
-                        text: clipboardManager.history[index],
+                        text: filteredHistory[index],
                         // 根据 selectedIndex 切换背景色
                         isSelected: index == selectedIndex,
                         // 【新增 Action 闭包】用于处理点击事件
                         onSelect: {
                             selectedIndex = index
-                            selectItem(clipboardManager.history[index])
+                            selectItem(filteredHistory[index])
                             // 复制后自动关闭窗口
                             NSApp.deactivate()
                         }
@@ -51,6 +84,7 @@ struct ContentView: View {
             // 关键设置 2：窗口出现时请求焦点
             .onAppear {
                 isListFocused = true
+                searchText = "" // 清空搜索框
                 if clipboardManager.history.isEmpty {
                     selectedIndex = -1
                 } else {
@@ -66,21 +100,21 @@ struct ContentView: View {
             
             // 处理回车 (Enter) 键
             .onKeyPress(.return) {
-                if selectedIndex >= 0 && selectedIndex < clipboardManager.history.count {
-                    selectItem(clipboardManager.history[selectedIndex])
+                if selectedIndex >= 0 && selectedIndex < filteredHistory.count {
+                    selectItem(filteredHistory[selectedIndex])
                     NSApp.deactivate()
                 }
                 return .handled
             }
-            
+
             // 处理向下箭头
             .onKeyPress(.downArrow) {
-                if selectedIndex < clipboardManager.history.count - 1 {
+                if selectedIndex < filteredHistory.count - 1 {
                     selectedIndex += 1
                 }
                 return .handled
             }
-            
+
             // 处理向上箭头
             .onKeyPress(.upArrow) {
                 if selectedIndex > 0 {
@@ -89,7 +123,7 @@ struct ContentView: View {
                 return .handled
             }
         }
-        .frame(width: 450, height: 300)
+        .frame(width: 500, minHeight: 300, maxHeight: 600)
         .background(Color.white)
     }
     
