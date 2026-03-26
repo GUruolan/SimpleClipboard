@@ -15,11 +15,13 @@ struct ContentView: View {
     @State private var searchText: String = ""
 
     // 过滤后的历史记录
-    var filteredHistory: [String] {
+    var filteredHistory: [ClipboardItem] {
         if searchText.isEmpty {
             return clipboardManager.history
         } else {
-            return clipboardManager.history.filter { $0.localizedCaseInsensitiveContains(searchText) }
+            return clipboardManager.history.filter {
+                $0.type.displayText.localizedCaseInsensitiveContains(searchText)
+            }
         }
     }
     
@@ -69,7 +71,7 @@ struct ContentView: View {
                     ForEach(filteredHistory.indices, id: \.self) { index in
                         HistoryRow(
                             manager: clipboardManager,
-                            text: filteredHistory[index],
+                            item: filteredHistory[index],
                             // 根据 selectedIndex 切换背景色
                             isSelected: index == selectedIndex,
                             // 【新增 Action 闭包】用于处理点击事件
@@ -147,7 +149,7 @@ struct ContentView: View {
     }
     
     // 私有方法：选中并复制项目
-    private func selectItem(_ item: String) {
+    private func selectItem(_ item: ClipboardItem) {
         clipboardManager.copyToHead(item: item)
         // 不立即修改顺序，下次打开窗口时自动调整
     }
@@ -156,28 +158,47 @@ struct ContentView: View {
 // 单独的行视图 (HistoryRow)
 struct HistoryRow: View {
     @ObservedObject var manager: ClipboardManager // 接收 manager
-    let text: String
+    let item: ClipboardItem
     let isSelected: Bool // 被选中状态
     let onSelect: () -> Void // 【新增】点击时执行的闭包
     @State private var isHovering = false
-    
+
     var body: some View {
         Button(action: {
             onSelect()
         }) {
             HStack(alignment: .top, spacing: 8) {
-                // 文本内容
-                Text(text)
-                    .font(.system(size: 14))
-                    .foregroundColor(.primary)
-                    .lineLimit(3)  // 最多显示 3 行
-                    .truncationMode(.tail)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .fixedSize(horizontal: false, vertical: true)  // 允许垂直扩展
+                // 内容显示（文本或图片）
+                switch item.type {
+                case .text(let text):
+                    Text(text)
+                        .font(.system(size: 14))
+                        .foregroundColor(.primary)
+                        .lineLimit(3)  // 最多显示 3 行
+                        .truncationMode(.tail)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)  // 允许垂直扩展
+
+                case .image(let imageData):
+                    if let nsImage = NSImage(data: imageData) {
+                        HStack(spacing: 8) {
+                            Image(nsImage: nsImage)
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: 60, height: 60)
+                                .cornerRadius(4)
+
+                            Text("[Image]")
+                                .font(.system(size: 14))
+                                .foregroundColor(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                }
 
                 // 删除按钮
                 Button {
-                    manager.delete(item: text) // 调用删除方法
+                    manager.delete(item: item) // 调用删除方法
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundColor(.gray)

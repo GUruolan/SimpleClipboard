@@ -121,50 +121,71 @@ class ClipboardManager: ObservableObject {
             return
         }
 
-        // 目前只处理文本类型
-        if let newString = pasteboard.string(forType: .string) {
+        var newItem: ClipboardItem?
+
+        // 优先检查图片
+        if let imageData = pasteboard.data(forType: .tiff) ?? pasteboard.data(forType: .png) {
+            newItem = ClipboardItem(type: .image(imageData))
+        }
+        // 然后检查文本
+        else if let newString = pasteboard.string(forType: .string) {
             // 去除前后空格
             let trimmedString = newString.trimmingCharacters(in: .whitespacesAndNewlines)
 
             // 避免保存空字符串或敏感内容
             if !trimmedString.isEmpty && !isSensitive(trimmedString) {
-                DispatchQueue.main.async {
-                    // 如果已存在，先删除旧位置
-                    if let existingIndex = self.history.firstIndex(of: trimmedString) {
-                        self.history.remove(at: existingIndex)
+                newItem = ClipboardItem(type: .text(trimmedString))
+            }
+        }
+
+        // 如果有新项目，添加到历史
+        if let item = newItem {
+            DispatchQueue.main.async {
+                // 检查是否已存在相同内容
+                if let existingIndex = self.history.firstIndex(where: { existing in
+                    switch (existing.type, item.type) {
+                    case (.text(let str1), .text(let str2)):
+                        return str1 == str2
+                    case (.image(let data1), .image(let data2)):
+                        return data1 == data2
+                    default:
+                        return false
                     }
-
-                    // 将内容插入到数组最前面
-                    self.history.insert(trimmedString, at: 0)
-
-                    // 限制只保存最近50条
-                    if self.history.count > maxHistoryCount {
-                        self.history.removeLast()
-                    }
-
-                    // 保存到 UserDefaults
-                    self.saveHistory()
+                }) {
+                    // 删除旧位置
+                    self.history.remove(at: existingIndex)
                 }
+
+                // 将内容插入到数组最前面
+                self.history.insert(item, at: 0)
+
+                // 限制只保存最近50条
+                if self.history.count > maxHistoryCount {
+                    self.history.removeLast()
+                }
+
+                // 保存到 UserDefaults
+                self.saveHistory()
             }
         }
     }
     
     // 将历史记录重新写入剪贴板
-    func copyToHead(item: String) {
-        // 检查剪贴板当前内容是否已经是这个项目
-        if let currentContent = pasteboard.string(forType: .string),
-           currentContent.trimmingCharacters(in: .whitespacesAndNewlines) == item {
-            // 已经是当前内容，不需要重复复制
-            return
-        }
-
+    func copyToHead(item: ClipboardItem) {
         shouldIgnoreNextChange = true // 设置标志，忽略这次剪贴板变化
         pasteboard.clearContents()
-        pasteboard.setString(item, forType: .string)
+
+        switch item.type {
+        case .text(let text):
+            pasteboard.setString(text, forType: .string)
+        case .image(let imageData):
+            pasteboard.setData(imageData, forType: .tiff)
+        }
     }
+
     // 【新增删除方法】
-    func delete(item: String) {
-        if let index = history.firstIndex(of: item) {
+    func delete(item: ClipboardItem) {
+        if let index = history.firstIndex(where: { $0.id == item.id }) {
             history.remove(at: index)
             saveHistory()
         }
