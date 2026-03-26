@@ -33,6 +33,7 @@ struct ContentView: View {
                 // 搜索框
                 TextField("Search...", text: $searchText)
                     .textFieldStyle(.roundedBorder)
+                    .controlSize(.large)
                     .onKeyPress(.downArrow) {
                         // 按下箭头时，将焦点转回列表
                         isListFocused = true
