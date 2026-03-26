@@ -1,6 +1,18 @@
 import Cocoa
 import SwiftUI
 import AppKit
+import Carbon
+
+// 辅助扩展：将字符串转换为 FourCharCode
+extension String {
+    var fourCharCodeValue: Int {
+        var result: Int = 0
+        for char in self.utf8 {
+            result = result << 8 + Int(char)
+        }
+        return result
+    }
+}
 
 // 自定义窗口类，允许 borderless 窗口接收键盘事件
 class KeyWindow: NSWindow {
@@ -24,16 +36,55 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var globalMonitor: Any?
     private var localMonitor: Any?
     private var isWindowShowing = false  // 追踪窗口显示状态
+    private var hotKeyRef: EventHotKeyRef?
     
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.shared = self
 
-        // 检查辅助功能权限
-        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]
-        _ = AXIsProcessTrustedWithOptions(options as CFDictionary)
+        // 使用 Carbon 热键 API（不需要辅助功能权限）
+        registerGlobalHotKey()
+        print("✅ 已注册全局快捷键: Control + Shift + V")
+    }
 
-        // 注册全局快捷键 (Command + Shift + V)
-        setupKeyboardMonitors()
+    private func registerGlobalHotKey() {
+        // 定义热键 ID
+        var hotKeyID = EventHotKeyID()
+        hotKeyID.signature = OSType("SCLP".fourCharCodeValue)
+        hotKeyID.id = 1
+
+        // 注册 Control + Shift + V
+        // V 的虚拟键码是 9
+        var eventHotKey: EventHotKeyRef?
+        let status = RegisterEventHotKey(
+            9, // V 键
+            UInt32(controlKey | shiftKey), // Control + Shift
+            hotKeyID,
+            GetEventDispatcherTarget(),
+            0,
+            &eventHotKey
+        )
+
+        if status == noErr {
+            hotKeyRef = eventHotKey
+
+            // 安装事件处理器
+            var eventSpec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
+            InstallEventHandler(GetEventDispatcherTarget(), { (nextHandler, theEvent, userData) -> OSStatus in
+                // 获取 AppDelegate 实例
+                guard let appDelegate = AppDelegate.shared else { return noErr }
+
+                // 触发窗口切换
+                DispatchQueue.main.async {
+                    appDelegate.toggleMenuBarExtra()
+                }
+
+                return noErr
+            }, 1, &eventSpec, nil, nil)
+
+            print("✅ Carbon 热键注册成功")
+        } else {
+            print("❌ Carbon 热键注册失败: \(status)")
+        }
     }
 
     private func setupKeyboardMonitors() {
@@ -61,15 +112,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func handleKeyEvent(_ event: NSEvent) {
-        // 检查 Command 键
-        let hasCommand = event.modifierFlags.contains(.command)
+        // 打印所有按键，用于调试
+        print("⌨️ KeyCode: \(event.keyCode), Modifiers: \(event.modifierFlags.rawValue)")
+
+        // 检查 Control 键
+        let hasControl = event.modifierFlags.contains(.control)
         // 检查 Shift 键
         let hasShift = event.modifierFlags.contains(.shift)
         // 检查 V 键 (KeyCode 9)
         let isVKey = event.keyCode == 9
 
-        // 精确匹配 Command + Shift + V
-        if isVKey && hasCommand && hasShift {
+        print("   Control=\(hasControl), Shift=\(hasShift), V=\(isVKey)")
+
+        // 精确匹配 Control + Shift + V
+        if isVKey && hasControl && hasShift {
             print("🎯 快捷键触发！")
             // 确保在主线程执行
             DispatchQueue.main.async { [weak self] in
@@ -79,13 +135,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func toggleMenuBarExtra() {
-        print("🔍 toggleMenuBarExtra 调用, isWindowShowing=\(isWindowShowing)")
-        if isWindowShowing {
+        // 检查窗口实际可见性，而不是依赖标志位
+        let isActuallyVisible = overlayWindow?.isVisible ?? false
+
+        print("🔍 toggleMenuBarExtra: isVisible=\(isActuallyVisible), isWindowShowing=\(isWindowShowing)")
+
+        if isActuallyVisible {
+            print("   → 隐藏窗口")
             hideOverlayWindow()
         } else {
+            print("   → 显示窗口")
             showOverlayWindow()
         }
-        print("   执行后 isWindowShowing=\(isWindowShowing)")
     }
 
     func showOverlayWindow() {

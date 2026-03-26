@@ -3,6 +3,7 @@ import AppKit
 import Combine
 
 private let maxHistoryCount = 50
+private let maxImageCount = 10  // 最多保存 10 张图片
 private let historyKey = "clipboardHistory"
 private let imageHistoryKey = "clipboardImageHistory"
 
@@ -61,6 +62,19 @@ class ClipboardManager: ObservableObject {
         if let data = UserDefaults.standard.data(forKey: historyKey),
            let decoded = try? JSONDecoder().decode([ClipboardItem].self, from: data) {
             history = decoded
+
+            // 清理过多的图片（防止数据过大）
+            let imageItems = history.filter { $0.type.isImage }
+            if imageItems.count > maxImageCount {
+                // 只保留最新的图片
+                let imagesToRemove = imageItems.dropFirst(maxImageCount)
+                history.removeAll { item in
+                    imagesToRemove.contains { $0.id == item.id }
+                }
+                // 立即保存清理后的数据
+                saveHistory()
+                print("🧹 清理了 \(imagesToRemove.count) 张旧图片")
+            }
         }
     }
 
@@ -162,6 +176,15 @@ class ClipboardManager: ObservableObject {
                 // 限制只保存最近50条
                 if self.history.count > maxHistoryCount {
                     self.history.removeLast()
+                }
+
+                // 限制图片数量（图片占用空间大）
+                let imageCount = self.history.filter { $0.type.isImage }.count
+                if imageCount > maxImageCount {
+                    // 找到并删除最旧的图片
+                    if let oldestImageIndex = self.history.lastIndex(where: { $0.type.isImage }) {
+                        self.history.remove(at: oldestImageIndex)
+                    }
                 }
 
                 // 保存到 UserDefaults
