@@ -186,7 +186,7 @@ struct HistoryRow: View {
                             Image(nsImage: nsImage)
                                 .resizable()
                                 .aspectRatio(contentMode: .fit)
-                                .frame(width: 60, height: 60)
+                                .frame(height: 60)  // 固定高度，宽度自适应
                                 .cornerRadius(4)
 
                             Text("[Image]")

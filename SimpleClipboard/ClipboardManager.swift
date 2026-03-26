@@ -59,21 +59,34 @@ class ClipboardManager: ObservableObject {
 
     // 加载历史记录
     private func loadHistory() {
-        if let data = UserDefaults.standard.data(forKey: historyKey),
-           let decoded = try? JSONDecoder().decode([ClipboardItem].self, from: data) {
-            history = decoded
+        // 先检查数据大小
+        if let data = UserDefaults.standard.data(forKey: historyKey) {
+            print("📊 历史数据大小: \(data.count / 1024 / 1024)MB")
 
-            // 清理过多的图片（防止数据过大）
-            let imageItems = history.filter { $0.type.isImage }
-            if imageItems.count > maxImageCount {
-                // 只保留最新的图片
-                let imagesToRemove = imageItems.dropFirst(maxImageCount)
-                history.removeAll { item in
-                    imagesToRemove.contains { $0.id == item.id }
+            // 如果数据过大（超过 3MB），直接清空
+            if data.count > 3 * 1024 * 1024 {
+                print("⚠️ 数据过大，清空所有历史")
+                UserDefaults.standard.removeObject(forKey: historyKey)
+                history = []
+                return
+            }
+
+            // 尝试解码
+            if let decoded = try? JSONDecoder().decode([ClipboardItem].self, from: data) {
+                history = decoded
+
+                // 清理过多的图片（防止数据过大）
+                let imageItems = history.filter { $0.type.isImage }
+                if imageItems.count > maxImageCount {
+                    // 只保留最新的图片
+                    let imagesToRemove = imageItems.dropFirst(maxImageCount)
+                    history.removeAll { item in
+                        imagesToRemove.contains { $0.id == item.id }
+                    }
+                    // 立即保存清理后的数据
+                    saveHistory()
+                    print("🧹 清理了 \(imagesToRemove.count) 张旧图片")
                 }
-                // 立即保存清理后的数据
-                saveHistory()
-                print("🧹 清理了 \(imagesToRemove.count) 张旧图片")
             }
         }
     }
@@ -81,7 +94,25 @@ class ClipboardManager: ObservableObject {
     // 保存历史记录
     private func saveHistory() {
         if let encoded = try? JSONEncoder().encode(history) {
-            UserDefaults.standard.set(encoded, forKey: historyKey)
+            // 检查数据大小，如果超过 3MB，删除所有图片
+            if encoded.count > 3 * 1024 * 1024 {
+                print("⚠️ 数据过大 (\(encoded.count / 1024 / 1024)MB)，删除所有图片")
+                history.removeAll { $0.type.isImage }
+
+                // 重新编码
+                if let newEncoded = try? JSONEncoder().encode(history) {
+                    // 先删除旧数据，再写入新数据（避免缓存问题）
+                    UserDefaults.standard.removeObject(forKey: historyKey)
+                    UserDefaults.standard.set(newEncoded, forKey: historyKey)
+                    UserDefaults.standard.synchronize()
+                    print("✅ 清理后数据大小: \(newEncoded.count / 1024)KB")
+                }
+            } else {
+                // 先删除旧数据，再写入新数据（避免缓存问题）
+                UserDefaults.standard.removeObject(forKey: historyKey)
+                UserDefaults.standard.set(encoded, forKey: historyKey)
+                UserDefaults.standard.synchronize()
+            }
         }
     }
 

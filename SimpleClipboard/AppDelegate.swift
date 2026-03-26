@@ -43,7 +43,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // 使用 Carbon 热键 API（不需要辅助功能权限）
         registerGlobalHotKey()
-        print("✅ 已注册全局快捷键: Control + Shift + V")
+        print("✅ 已注册全局快捷键: Command + Shift + V")
     }
 
     private func registerGlobalHotKey() {
@@ -52,12 +52,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         hotKeyID.signature = OSType("SCLP".fourCharCodeValue)
         hotKeyID.id = 1
 
-        // 注册 Control + Shift + V
+        // 注册 Command + Shift + V
         // V 的虚拟键码是 9
         var eventHotKey: EventHotKeyRef?
         let status = RegisterEventHotKey(
             9, // V 键
-            UInt32(controlKey | shiftKey), // Control + Shift
+            UInt32(cmdKey | shiftKey), // Command + Shift
             hotKeyID,
             GetEventDispatcherTarget(),
             0,
@@ -154,13 +154,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             createOverlayWindow()
         }
 
+        // 先激活应用
+        NSApp.activate(ignoringOtherApps: true)
+
+        // 显示窗口
         overlayWindow?.makeKeyAndOrderFront(nil)
         overlayWindow?.level = .floating
 
         // 确保窗口成为焦点窗口
         overlayWindow?.makeFirstResponder(overlayWindow?.contentView)
 
-        NSApp.activate(ignoringOtherApps: true)
+        // 再次确保窗口是 key window
+        overlayWindow?.makeKey()
 
         isWindowShowing = true  // 标记窗口已显示
     }
