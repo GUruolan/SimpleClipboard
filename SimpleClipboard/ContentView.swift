@@ -26,122 +26,130 @@ struct ContentView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             
-            // 样式调整 1: 头部使用更简洁的颜色和内边距
-            VStack(spacing: 8) {
-                HStack {
-                    Text("Clipboard History")
-                        // 【样式调整：字体加粗】
-                        .font(.system(.title2 ).bold())
-                        .foregroundColor(.black)
-
-                    Spacer()
-
-                    // 清空历史按钮
-                    Button {
-                        clipboardManager.clearHistory()
-                        selectedIndex = 0
-                    } label: {
-                        Image(systemName: "trash")
-                            .foregroundColor(.red)
-                    }
-                    .buttonStyle(.borderless)
-                    .help("Clear all history")
-                }
-
+            // 头部工具栏
+            HStack(spacing: 12) {
                 // 搜索框
                 TextField("Search...", text: $searchText)
                     .textFieldStyle(.roundedBorder)
-                    .padding(.horizontal, 4)
+                    .onKeyPress(.downArrow) {
+                        // 按下箭头时，将焦点转回列表
+                        isListFocused = true
+                        return .handled
+                    }
+                    .onKeyPress(.upArrow) {
+                        // 按上箭头时，将焦点转回列表
+                        isListFocused = true
+                        return .handled
+                    }
+                    .onSubmit {
+                        // 按回车后，将焦点转回列表
+                        isListFocused = true
+                    }
+
+                // 清空历史按钮
+                Button {
+                    clipboardManager.clearHistory()
+                    selectedIndex = 0
+                } label: {
+                    Image(systemName: "trash")
+                        .foregroundColor(.red)
+                        .imageScale(.medium)
+                }
+                .buttonStyle(.borderless)
+                .help("Clear all history")
             }
-            .padding(.horizontal)
-            .padding(.vertical, 8)
-            .background(Color.white.opacity(0.8)) // 更淡的背景
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(Color(NSColor.controlBackgroundColor))
 
             Divider()
-            
-            List {
-                ForEach(filteredHistory.indices, id: \.self) { index in
-                    HistoryRow(
-                        manager: clipboardManager,
-                        text: filteredHistory[index],
-                        // 根据 selectedIndex 切换背景色
-                        isSelected: index == selectedIndex,
-                        // 【新增 Action 闭包】用于处理点击事件
-                        onSelect: {
-                            selectedIndex = index
-                            selectItem(filteredHistory[index])
-                            // 复制后自动关闭窗口
+
+            ScrollViewReader { proxy in
+                List {
+                    ForEach(filteredHistory.indices, id: \.self) { index in
+                        HistoryRow(
+                            manager: clipboardManager,
+                            text: filteredHistory[index],
+                            // 根据 selectedIndex 切换背景色
+                            isSelected: index == selectedIndex,
+                            // 【新增 Action 闭包】用于处理点击事件
+                            onSelect: {
+                                selectedIndex = index
+                                selectItem(filteredHistory[index])
+                                // 复制后自动关闭窗口
+                                NSApp.deactivate()
+                            }
+                        )
+                        .id(index) // 给每个项目设置 ID
+                        // 修复：由于 HistoryRow 内部已经处理了 onTapGesture，这里不需要重复设置
+                    }
+                }
+                .listStyle(.plain)
+                .focusable()
+                // 关键设置 1：设置焦点状态
+                .focused($isListFocused)
+                // 处理回车 (Enter) 键
+                .onKeyPress(.return) {
+                    if selectedIndex >= 0 && selectedIndex < filteredHistory.count {
+                        selectItem(filteredHistory[selectedIndex])
+                        // 关闭窗口
+                        DispatchQueue.main.async {
+                            if let window = NSApp.keyWindow {
+                                window.close()
+                            }
                             NSApp.deactivate()
                         }
-                    )
-                    // 修复：由于 HistoryRow 内部已经处理了 onTapGesture，这里不需要重复设置
+                    }
+                    return .handled
                 }
-            }
-            .listStyle(.plain)
-            // 关键设置 1：设置焦点状态
-            .focused($isListFocused)
-            
-            // 关键设置 2：窗口出现时请求焦点
-            .onAppear {
-                isListFocused = true
-                searchText = "" // 清空搜索框
-                if clipboardManager.history.isEmpty {
-                    selectedIndex = -1
-                } else {
-                    selectedIndex = 0 // 默认选中第一项
+                // 处理向下箭头
+                .onKeyPress(.downArrow) {
+                    if selectedIndex < filteredHistory.count - 1 {
+                        selectedIndex += 1
+                        // 滚动到选中项
+                        withAnimation {
+                            proxy.scrollTo(selectedIndex, anchor: .center)
+                        }
+                    }
+                    return .handled
                 }
-                // 确保应用被激活，以便接收键盘事件
-                NSApp.activate(ignoringOtherApps: true)
-            }
-            // 确保窗口关闭时取消焦点
-            .onDisappear {
-                isListFocused = false
-            }
-            
-            // 处理回车 (Enter) 键
-            .onKeyPress(.return) {
-                if selectedIndex >= 0 && selectedIndex < filteredHistory.count {
-                    selectItem(filteredHistory[selectedIndex])
-                    NSApp.deactivate()
+                // 处理向上箭头
+                .onKeyPress(.upArrow) {
+                    if selectedIndex > 0 {
+                        selectedIndex -= 1
+                        // 滚动到选中项
+                        withAnimation {
+                            proxy.scrollTo(selectedIndex, anchor: .center)
+                        }
+                    }
+                    return .handled
                 }
-                return .handled
-            }
-
-            // 处理向下箭头
-            .onKeyPress(.downArrow) {
-                if selectedIndex < filteredHistory.count - 1 {
-                    selectedIndex += 1
+                // 关键设置 2：窗口出现时请求焦点
+                .onAppear {
+                    isListFocused = true
+                    searchText = "" // 清空搜索框
+                    if clipboardManager.history.isEmpty {
+                        selectedIndex = -1
+                    } else {
+                        selectedIndex = 0 // 默认选中第一项
+                    }
+                    // 确保应用被激活，以便接收键盘事件
+                    NSApp.activate(ignoringOtherApps: true)
                 }
-                return .handled
-            }
-
-            // 处理向上箭头
-            .onKeyPress(.upArrow) {
-                if selectedIndex > 0 {
-                    selectedIndex -= 1
+                // 确保窗口关闭时取消焦点
+                .onDisappear {
+                    isListFocused = false
                 }
-                return .handled
             }
         }
-        .frame(width: 500, minHeight: 300, maxHeight: 600)
+        .frame(width: 500, height: 300)
         .background(Color.white)
     }
     
     // 私有方法：选中并复制项目
     private func selectItem(_ item: String) {
         clipboardManager.copyToHead(item: item)
-        
-        // 优化：将选中的项目移到列表最上方（解决 Publishing changes 错误的关键）
-        guard let selectedIndex = clipboardManager.history.firstIndex(of: item) else {
-            return
-        }
-        
-        // 使用 DispatchQueue.main.async 延迟执行状态修改
-        DispatchQueue.main.async {
-            // 推荐的“移动到顶部”安全写法：
-            let itemToMove = self.clipboardManager.history.remove(at: selectedIndex) // 删除旧项
-            self.clipboardManager.history.insert(itemToMove, at: 0) // 插入新项
-        }
+        // 不立即修改顺序，下次打开窗口时自动调整
     }
 }
 
@@ -154,45 +162,50 @@ struct HistoryRow: View {
     @State private var isHovering = false
     
     var body: some View {
-        HStack {
-            // 文本内容
-            Text(text)
-                .font(.system(size: 14))
-                .foregroundColor(.primary)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .padding(.vertical, 4)
-                
-            Spacer() // 将文字和按钮推到两端
-            
-            // 删除按钮
-            Button {
-                manager.delete(item: text) // 调用删除方法
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .foregroundColor(.gray)
-                    .imageScale(.medium)
+        Button(action: {
+            onSelect()
+        }) {
+            HStack(alignment: .top, spacing: 8) {
+                // 文本内容
+                Text(text)
+                    .font(.system(size: 14))
+                    .foregroundColor(.primary)
+                    .lineLimit(3)  // 最多显示 3 行
+                    .truncationMode(.tail)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)  // 允许垂直扩展
+
+                // 删除按钮
+                Button {
+                    manager.delete(item: text) // 调用删除方法
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(.gray)
+                        .imageScale(.medium)
+                }
+                .buttonStyle(.borderless) // 隐藏按钮边框
+                .opacity(isHovering ? 1.0 : 0.0) // 鼠标悬停时才显示
             }
-            .buttonStyle(.borderless) // 隐藏按钮边框
-            .opacity(isHovering ? 1.0 : 0.0) // 鼠标悬停时才显示
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 2)
-        // 【样式修改】如果被选中（键盘）或鼠标悬停，使用蓝色背景
-        .background(isSelected || isHovering ? Color.blue.opacity(0.2) : Color.clear).cornerRadius(8)
-        .overlay(
-            isSelected ? AnyView(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.blue.opacity(0.8), lineWidth: 2)
-                ) : AnyView(EmptyView())
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            // 【样式修改】键盘选中优先级高于鼠标悬停
+            .background(
+                isSelected
+                    ? Color.blue.opacity(0.3)  // 键盘选中：深蓝色
+                    : (isHovering ? Color.blue.opacity(0.1) : Color.clear)  // 鼠标悬停：浅蓝色
             )
-        .contentShape(Rectangle()) // 使整个 HStack 区域可点击/悬停
+            .cornerRadius(8)
+            .overlay(
+                isSelected ? AnyView(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.blue.opacity(0.8), lineWidth: 2)
+                    ) : AnyView(EmptyView())
+            )
+            .contentShape(Rectangle()) // 使整个 HStack 区域可点击
+        }
+        .buttonStyle(.plain) // 使用 plain 样式避免默认按钮样式
         .onHover { hovering in
             isHovering = hovering
-        }
-        // 【修复】点击时调用外部传入的 onSelect 闭包
-        .onTapGesture {
-            onSelect()
         }
     }
 }
