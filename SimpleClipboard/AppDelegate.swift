@@ -33,8 +33,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     static var shared: AppDelegate?
     var clipboardManager: ClipboardManager?
 
-    private var globalMonitor: Any?
-    private var localMonitor: Any?
     private var isWindowShowing = false  // 追踪窗口显示状态
     private var hotKeyRef: EventHotKeyRef?
     
@@ -87,85 +85,67 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func setupKeyboardMonitors() {
-        // 全局监听（其他应用）
-        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            self?.handleKeyEvent(event)
-        }
-
-        // 本地监听（自己应用）
-        localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            self?.handleKeyEvent(event)
-            return event
-        }
-    }
-
-    private func removeKeyboardMonitors() {
-        if let monitor = globalMonitor {
-            NSEvent.removeMonitor(monitor)
-            globalMonitor = nil
-        }
-        if let monitor = localMonitor {
-            NSEvent.removeMonitor(monitor)
-            localMonitor = nil
-        }
-    }
-
-    private func handleKeyEvent(_ event: NSEvent) {
-        // 打印所有按键，用于调试
-        print("⌨️ KeyCode: \(event.keyCode), Modifiers: \(event.modifierFlags.rawValue)")
-
-        // 检查 Control 键
-        let hasControl = event.modifierFlags.contains(.control)
-        // 检查 Shift 键
-        let hasShift = event.modifierFlags.contains(.shift)
-        // 检查 V 键 (KeyCode 9)
-        let isVKey = event.keyCode == 9
-
-        print("   Control=\(hasControl), Shift=\(hasShift), V=\(isVKey)")
-
-        // 精确匹配 Control + Shift + V
-        if isVKey && hasControl && hasShift {
-            print("🎯 快捷键触发！")
-            // 确保在主线程执行
-            DispatchQueue.main.async { [weak self] in
-                self?.toggleMenuBarExtra()
-            }
-        }
-    }
     
     func toggleMenuBarExtra() {
         // 检查窗口实际可见性，而不是依赖标志位
         let isActuallyVisible = overlayWindow?.isVisible ?? false
 
-        print("🔍 toggleMenuBarExtra: isVisible=\(isActuallyVisible), isWindowShowing=\(isWindowShowing)")
-
         if isActuallyVisible {
-            print("   → 隐藏窗口")
             hideOverlayWindow()
         } else {
-            print("   → 显示窗口")
             showOverlayWindow()
         }
     }
 
     func showOverlayWindow() {
+        // 获取当前鼠标所在的屏幕
+        let mouseLocation = NSEvent.mouseLocation
+        let currentScreen = NSScreen.screens.first { screen in
+            NSMouseInRect(mouseLocation, screen.frame, false)
+        } ?? NSScreen.main ?? NSScreen.screens.first!
+
+
+        // 如果窗口不存在，创建窗口
         if overlayWindow == nil {
             createOverlayWindow()
         }
 
-        // 先激活应用
-        NSApp.activate(ignoringOtherApps: true)
+        // 更新窗口位置到当前屏幕（在显示之前）
+        overlayWindow?.setFrame(currentScreen.frame, display: false)
 
-        // 显示窗口
+        // 设置窗口层级为最高
+        overlayWindow?.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.maximumWindow)))
+
+        // 强制窗口到最前面
+        overlayWindow?.orderFrontRegardless()
+
+        // 显示窗口并设置为 key window
         overlayWindow?.makeKeyAndOrderFront(nil)
-        overlayWindow?.level = .floating
 
-        // 确保窗口成为焦点窗口
-        overlayWindow?.makeFirstResponder(overlayWindow?.contentView)
+        // 激活应用（会切换到应用所在的 Space）
+        NSRunningApplication.current.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
 
-        // 再次确保窗口是 key window
-        overlayWindow?.makeKey()
+        // 等待桌面切换动画完成后再设置焦点
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let window = self?.overlayWindow else { return }
+
+            // 第一次激活
+            NSRunningApplication.current.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
+
+            // 确保窗口在最前面
+            window.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.maximumWindow)))
+            window.orderFrontRegardless()
+            window.makeKeyAndOrderFront(nil)
+
+            // 短暂延迟后再次强制获取焦点
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                NSRunningApplication.current.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
+                window.makeKey()
+                window.makeFirstResponder(window.contentView)
+
+                print("✅ 焦点已设置 (两次激活)")
+            }
+        }
 
         isWindowShowing = true  // 标记窗口已显示
     }
@@ -181,8 +161,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func createOverlayWindow() {
-        // 获取主屏幕尺寸
-        guard let screen = NSScreen.main else { return }
+        // 获取当前鼠标所在的屏幕（即用户正在使用的屏幕）
+        let mouseLocation = NSEvent.mouseLocation
+        let screen = NSScreen.screens.first { screen in
+            NSMouseInRect(mouseLocation, screen.frame, false)
+        } ?? NSScreen.main ?? NSScreen.screens.first!
+
         let screenFrame = screen.frame
 
         // 使用自定义窗口类，允许 borderless 窗口接收键盘事件
@@ -196,8 +180,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window.isOpaque = false
         window.backgroundColor = .clear
         window.hasShadow = false
-        window.level = .floating
-        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+
+        // 设置窗口层级为最高
+        window.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.maximumWindow)))
+
+        // 窗口行为：不加入所有空间，让系统自动切换到窗口所在的桌面
+        window.collectionBehavior = [
+            .moveToActiveSpace,          // 移动到当前活跃的空间（关键！）
+            .transient,                  // 临时窗口
+            .ignoresCycle                // 不参与窗口循环
+        ]
 
         // 关键设置：允许窗口接收键盘和鼠标事件
         window.acceptsMouseMovedEvents = true
