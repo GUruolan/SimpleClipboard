@@ -35,13 +35,32 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var isWindowShowing = false  // 追踪窗口显示状态
     private var hotKeyRef: EventHotKeyRef?
+    private var leftArrowHotKeyRef: EventHotKeyRef?
+    private var rightArrowHotKeyRef: EventHotKeyRef?
     
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.shared = self
 
+        // 检查辅助功能权限（桌面切换需要）
+        checkAccessibilityPermission()
+
         // 使用 Carbon 热键 API（不需要辅助功能权限）
         registerGlobalHotKey()
+        registerDesktopSwitchHotKeys()
         print("✅ 已注册全局快捷键: Command + Shift + V")
+        print("✅ 已注册桌面切换快捷键: Command + 左/右箭头")
+    }
+
+    private func checkAccessibilityPermission() {
+        let options: NSDictionary = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]
+        let accessEnabled = AXIsProcessTrustedWithOptions(options)
+
+        if !accessEnabled {
+            print("⚠️ 桌面切换功能需要辅助功能权限")
+            print("⚠️ 请在系统设置 > 隐私与安全性 > 辅助功能 中授权")
+        } else {
+            print("✅ 辅助功能权限已授予")
+        }
     }
 
     private func registerGlobalHotKey() {
@@ -64,28 +83,116 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         if status == noErr {
             hotKeyRef = eventHotKey
-
-            // 安装事件处理器
-            var eventSpec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
-            InstallEventHandler(GetEventDispatcherTarget(), { (nextHandler, theEvent, userData) -> OSStatus in
-                // 获取 AppDelegate 实例
-                guard let appDelegate = AppDelegate.shared else { return noErr }
-
-                // 触发窗口切换
-                DispatchQueue.main.async {
-                    appDelegate.toggleMenuBarExtra()
-                }
-
-                return noErr
-            }, 1, &eventSpec, nil, nil)
-
-            print("✅ Carbon 热键注册成功")
+            print("✅ Command + Shift + V 注册成功")
         } else {
-            print("❌ Carbon 热键注册失败: \(status)")
+            print("❌ Command + Shift + V 注册失败: \(status)")
         }
     }
 
-    
+    private func registerDesktopSwitchHotKeys() {
+        // 注册 Command + 左箭头 (切换到左边的桌面)
+        var leftHotKeyID = EventHotKeyID()
+        leftHotKeyID.signature = OSType("SCLF".fourCharCodeValue)
+        leftHotKeyID.id = 2
+
+        // 左箭头的虚拟键码是 123
+        var leftEventHotKey: EventHotKeyRef?
+        let leftStatus = RegisterEventHotKey(
+            123, // 左箭头键
+            UInt32(cmdKey), // Command
+            leftHotKeyID,
+            GetEventDispatcherTarget(),
+            0,
+            &leftEventHotKey
+        )
+
+        if leftStatus == noErr {
+            leftArrowHotKeyRef = leftEventHotKey
+            print("✅ Command + 左箭头 注册成功")
+        } else {
+            print("❌ Command + 左箭头 注册失败: \(leftStatus)")
+        }
+
+        // 注册 Command + 右箭头 (切换到右边的桌面)
+        var rightHotKeyID = EventHotKeyID()
+        rightHotKeyID.signature = OSType("SCRT".fourCharCodeValue)
+        rightHotKeyID.id = 3
+
+        // 右箭头的虚拟键码是 124
+        var rightEventHotKey: EventHotKeyRef?
+        let rightStatus = RegisterEventHotKey(
+            124, // 右箭头键
+            UInt32(cmdKey), // Command
+            rightHotKeyID,
+            GetEventDispatcherTarget(),
+            0,
+            &rightEventHotKey
+        )
+
+        if rightStatus == noErr {
+            rightArrowHotKeyRef = rightEventHotKey
+            print("✅ Command + 右箭头 注册成功")
+        } else {
+            print("❌ Command + 右箭头 注册失败: \(rightStatus)")
+        }
+
+        // 统一安装事件处理器（处理所有热键）
+        var eventSpec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
+        InstallEventHandler(GetEventDispatcherTarget(), { (nextHandler, theEvent, userData) -> OSStatus in
+            var hotKeyID = EventHotKeyID()
+            GetEventParameter(theEvent, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID), nil, MemoryLayout<EventHotKeyID>.size, nil, &hotKeyID)
+
+            DispatchQueue.main.async {
+                guard let appDelegate = AppDelegate.shared else { return }
+
+                // 根据 hotKeyID 判断是哪个快捷键
+                if hotKeyID.id == 1 {
+                    // Command + Shift + V
+                    appDelegate.toggleMenuBarExtra()
+                } else if hotKeyID.id == 2 {
+                    // Command + 左箭头
+                    appDelegate.switchToLeftDesktop()
+                } else if hotKeyID.id == 3 {
+                    // Command + 右箭头
+                    appDelegate.switchToRightDesktop()
+                }
+            }
+
+            return noErr
+        }, 1, &eventSpec, nil, nil)
+    }
+
+    private func switchToLeftDesktop() {
+        // 模拟系统快捷键 Control + 左箭头
+        simulateKeyPress(keyCode: 123, flags: .maskControl)
+    }
+
+    private func switchToRightDesktop() {
+        // 模拟系统快捷键 Control + 右箭头
+        simulateKeyPress(keyCode: 124, flags: .maskControl)
+    }
+
+    private func simulateKeyPress(keyCode: CGKeyCode, flags: CGEventFlags) {
+        // 创建键盘按下事件
+        guard let keyDownEvent = CGEvent(keyboardEventSource: nil, virtualKey: keyCode, keyDown: true) else {
+            print("❌ 无法创建按键事件")
+            return
+        }
+        keyDownEvent.flags = flags
+
+        // 创建键盘释放事件
+        guard let keyUpEvent = CGEvent(keyboardEventSource: nil, virtualKey: keyCode, keyDown: false) else {
+            print("❌ 无法创建释放事件")
+            return
+        }
+        keyUpEvent.flags = flags
+
+        // 发送事件
+        keyDownEvent.post(tap: .cghidEventTap)
+        keyUpEvent.post(tap: .cghidEventTap)
+    }
+
+
     func toggleMenuBarExtra() {
         // 检查窗口实际可见性，而不是依赖标志位
         let isActuallyVisible = overlayWindow?.isVisible ?? false
@@ -104,14 +211,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             NSMouseInRect(mouseLocation, screen.frame, false)
         } ?? NSScreen.main ?? NSScreen.screens.first!
 
-
-        // 如果窗口不存在，创建窗口
-        if overlayWindow == nil {
-            createOverlayWindow()
+        // 每次都重新创建窗口，确保尺寸正确
+        if let window = overlayWindow {
+            window.orderOut(nil)
+            overlayWindow = nil
         }
 
-        // 更新窗口位置到当前屏幕（在显示之前）
-        overlayWindow?.setFrame(currentScreen.frame, display: false)
+        createOverlayWindow(for: currentScreen)
 
         // 设置窗口层级为最高
         overlayWindow?.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.maximumWindow)))
@@ -160,14 +266,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         isWindowShowing = false  // 标记窗口已隐藏
     }
 
-    private func createOverlayWindow() {
-        // 获取当前鼠标所在的屏幕（即用户正在使用的屏幕）
-        let mouseLocation = NSEvent.mouseLocation
-        let screen = NSScreen.screens.first { screen in
-            NSMouseInRect(mouseLocation, screen.frame, false)
-        } ?? NSScreen.main ?? NSScreen.screens.first!
+    private func createOverlayWindow(for screen: NSScreen? = nil) {
+        // 使用传入的屏幕，或者获取当前鼠标所在的屏幕
+        let targetScreen: NSScreen
+        if let screen = screen {
+            targetScreen = screen
+        } else {
+            let mouseLocation = NSEvent.mouseLocation
+            targetScreen = NSScreen.screens.first { screen in
+                NSMouseInRect(mouseLocation, screen.frame, false)
+            } ?? NSScreen.main ?? NSScreen.screens.first!
+        }
 
-        let screenFrame = screen.frame
+        let screenFrame = targetScreen.frame
 
         // 使用自定义窗口类，允许 borderless 窗口接收键盘事件
         let window = KeyWindow(
