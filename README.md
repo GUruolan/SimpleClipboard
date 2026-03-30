@@ -76,27 +76,6 @@ SimpleClipboard/
 └── Assets.xcassets/               # 资源文件
 ```
 
-## 🔧 自定义配置
-
-### 修改历史记录上限
-
-`ClipboardManager.swift:5-6`
-```swift
-private let maxHistoryCount = 50  // 文本历史上限
-private let maxImageCount = 10    // 图片历史上限
-```
-
-### 添加敏感关键词
-
-`ClipboardManager.swift:146`
-```swift
-let sensitiveKeywords = ["password", "token", "你的关键词"]
-```
-
-## 📄 许可证
-
-MIT License
-
 ---
 
 **⭐ 如果觉得有用，请给个 Star！**
