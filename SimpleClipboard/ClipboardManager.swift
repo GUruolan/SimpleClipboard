@@ -137,8 +137,9 @@ class ClipboardManager: ObservableObject {
             return true
         }
 
-        // 2. 检查是否像 Token（长字符串无空格）
-        if text.count > 40 && !text.contains(" ") && !text.contains("\n") {
+        // 2. 检查是否像 Token（长字符串无空格，但排除 URL）
+        let isURL = text.hasPrefix("http://") || text.hasPrefix("https://") || text.hasPrefix("ftp://")
+        if text.count > 40 && !text.contains(" ") && !text.contains("\n") && !isURL {
             return true
         }
 
