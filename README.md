@@ -2,6 +2,8 @@
 
 一个简洁优雅的 macOS 剪贴板历史管理工具。
 
+> 🤖 本项目由 AI (Claude) 辅助生成
+
 ![macOS](https://img.shields.io/badge/macOS-13.0+-blue)
 ![Swift](https://img.shields.io/badge/Swift-5.9-orange)
 ![License](https://img.shields.io/badge/License-MIT-green)
